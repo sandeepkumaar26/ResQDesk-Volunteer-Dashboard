@@ -1,23 +1,152 @@
-import { heatMapZones, HeatMapZone } from '@/data/mockData';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin, AlertTriangle } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import mapboxgl from 'mapbox-gl';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { MapPin, AlertTriangle } from "lucide-react";
 
-const intensityColors: Record<HeatMapZone['intensity'], { bg: string; border: string; text: string; pulse?: boolean }> = {
-  low: { bg: 'bg-success/20', border: 'border-success/40', text: 'text-success' },
-  medium: { bg: 'bg-warning/20', border: 'border-warning/40', text: 'text-warning' },
-  high: { bg: 'bg-urgent/30', border: 'border-urgent/50', text: 'text-urgent' },
-  critical: { bg: 'bg-urgent/40', border: 'border-urgent', text: 'text-urgent', pulse: true },
-};
-
-const intensityLabels: Record<HeatMapZone['intensity'], string> = {
-  low: 'Low',
-  medium: 'Moderate',
-  high: 'High',
-  critical: 'Critical',
+// Sample distress call locations with varying intensities
+const distressCallData = {
+  type: 'FeatureCollection' as const,
+  features: [
+    // High density cluster - Downtown Chennai
+    { type: 'Feature' as const, properties: { intensity: 0.9 }, geometry: { type: 'Point' as const, coordinates: [80.2707, 13.0827] } },
+    { type: 'Feature' as const, properties: { intensity: 0.85 }, geometry: { type: 'Point' as const, coordinates: [80.2650, 13.0850] } },
+    { type: 'Feature' as const, properties: { intensity: 0.88 }, geometry: { type: 'Point' as const, coordinates: [80.2720, 13.0800] } },
+    { type: 'Feature' as const, properties: { intensity: 0.82 }, geometry: { type: 'Point' as const, coordinates: [80.2680, 13.0870] } },
+    { type: 'Feature' as const, properties: { intensity: 0.9 }, geometry: { type: 'Point' as const, coordinates: [80.2690, 13.0810] } },
+    { type: 'Feature' as const, properties: { intensity: 0.87 }, geometry: { type: 'Point' as const, coordinates: [80.2710, 13.0840] } },
+    
+    // Medium-high density - T. Nagar
+    { type: 'Feature' as const, properties: { intensity: 0.7 }, geometry: { type: 'Point' as const, coordinates: [80.2339, 13.0418] } },
+    { type: 'Feature' as const, properties: { intensity: 0.65 }, geometry: { type: 'Point' as const, coordinates: [80.2350, 13.0430] } },
+    { type: 'Feature' as const, properties: { intensity: 0.72 }, geometry: { type: 'Point' as const, coordinates: [80.2320, 13.0400] } },
+    { type: 'Feature' as const, properties: { intensity: 0.68 }, geometry: { type: 'Point' as const, coordinates: [80.2360, 13.0410] } },
+    
+    // Medium density - Adyar
+    { type: 'Feature' as const, properties: { intensity: 0.5 }, geometry: { type: 'Point' as const, coordinates: [80.2565, 13.0012] } },
+    { type: 'Feature' as const, properties: { intensity: 0.55 }, geometry: { type: 'Point' as const, coordinates: [80.2580, 13.0030] } },
+    { type: 'Feature' as const, properties: { intensity: 0.48 }, geometry: { type: 'Point' as const, coordinates: [80.2550, 13.0000] } },
+    
+    // Lower density - Velachery
+    { type: 'Feature' as const, properties: { intensity: 0.35 }, geometry: { type: 'Point' as const, coordinates: [80.2180, 12.9815] } },
+    { type: 'Feature' as const, properties: { intensity: 0.3 }, geometry: { type: 'Point' as const, coordinates: [80.2200, 12.9830] } },
+    
+    // Low density - Tambaram
+    { type: 'Feature' as const, properties: { intensity: 0.2 }, geometry: { type: 'Point' as const, coordinates: [80.1270, 12.9249] } },
+    { type: 'Feature' as const, properties: { intensity: 0.15 }, geometry: { type: 'Point' as const, coordinates: [80.1290, 12.9260] } },
+    
+    // Very low density - outskirts
+    { type: 'Feature' as const, properties: { intensity: 0.1 }, geometry: { type: 'Point' as const, coordinates: [80.0500, 12.8500] } },
+    { type: 'Feature' as const, properties: { intensity: 0.08 }, geometry: { type: 'Point' as const, coordinates: [80.3500, 13.1500] } },
+  ]
 };
 
 export function HeatMap() {
-  const sortedZones = [...heatMapZones].sort((a, b) => b.callCount - a.callCount);
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const [mapboxToken, setMapboxToken] = useState('');
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [tokenInput, setTokenInput] = useState('');
+
+  const initializeMap = (token: string) => {
+    if (!mapContainer.current || !token) return;
+
+    mapboxgl.accessToken = token;
+
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: 'mapbox://styles/mapbox/dark-v11',
+      center: [80.2707, 13.0827], // Chennai, India
+      zoom: 10,
+    });
+
+    map.current.addControl(
+      new mapboxgl.NavigationControl(),
+      'top-right'
+    );
+
+    map.current.on('load', () => {
+      if (!map.current) return;
+
+      // Add the heatmap source
+      map.current.addSource('distress-calls', {
+        type: 'geojson',
+        data: distressCallData
+      });
+
+      // Add heatmap layer with blue to red gradient
+      map.current.addLayer({
+        id: 'distress-heat',
+        type: 'heatmap',
+        source: 'distress-calls',
+        maxzoom: 15,
+        paint: {
+          // Increase weight based on intensity property
+          'heatmap-weight': [
+            'interpolate',
+            ['linear'],
+            ['get', 'intensity'],
+            0, 0,
+            1, 1
+          ],
+          // Increase intensity as zoom level increases
+          'heatmap-intensity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0, 1,
+            15, 3
+          ],
+          // Color gradient from blue (low) to red (high)
+          'heatmap-color': [
+            'interpolate',
+            ['linear'],
+            ['heatmap-density'],
+            0, 'rgba(0, 0, 255, 0)',
+            0.1, 'rgba(65, 105, 225, 0.4)',
+            0.3, 'rgba(0, 191, 255, 0.6)',
+            0.5, 'rgba(50, 205, 50, 0.7)',
+            0.7, 'rgba(255, 215, 0, 0.8)',
+            0.85, 'rgba(255, 140, 0, 0.9)',
+            1, 'rgba(220, 20, 60, 1)'
+          ],
+          // Adjust radius by zoom level
+          'heatmap-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0, 15,
+            15, 30
+          ],
+          // Decrease opacity at higher zoom levels
+          'heatmap-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            7, 1,
+            15, 0.6
+          ]
+        }
+      });
+
+      setIsMapLoaded(true);
+    });
+  };
+
+  const handleTokenSubmit = () => {
+    if (tokenInput.trim()) {
+      setMapboxToken(tokenInput.trim());
+      initializeMap(tokenInput.trim());
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      map.current?.remove();
+    };
+  }, []);
 
   return (
     <Card className="border shadow-md">
@@ -33,90 +162,61 @@ export function HeatMap() {
         </div>
       </CardHeader>
       <CardContent className="pt-6">
-        {/* Visual Map Representation */}
-        <div className="relative bg-gradient-to-br from-secondary/5 to-muted/30 rounded-xl p-6 mb-6 min-h-[280px] border border-border/50">
-          {/* Map Grid Background */}
-          <div className="absolute inset-0 opacity-10">
-            <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" strokeWidth="0.5"/>
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-            </svg>
-          </div>
-          
-          {/* Zone Bubbles */}
-          <div className="relative grid grid-cols-4 gap-4 h-full">
-            {sortedZones.map((zone, index) => {
-              const styles = intensityColors[zone.intensity];
-              const size = zone.intensity === 'critical' ? 'w-20 h-20' : 
-                          zone.intensity === 'high' ? 'w-16 h-16' : 
-                          zone.intensity === 'medium' ? 'w-14 h-14' : 'w-12 h-12';
-              
-              return (
-                <div 
-                  key={zone.id}
-                  className="flex items-center justify-center animate-fade-in"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <div 
-                    className={`
-                      ${size} ${styles.bg} ${styles.border} border-2 rounded-full 
-                      flex flex-col items-center justify-center cursor-pointer
-                      transition-all duration-300 hover:scale-110 hover:shadow-lg
-                      ${styles.pulse ? 'animate-pulse-slow' : ''}
-                    `}
-                    title={`${zone.name}: ${zone.callCount} calls`}
+        {!mapboxToken ? (
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50 border border-border/50">
+              <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
+              <div className="space-y-2">
+                <p className="text-sm text-foreground">
+                  To display the interactive heatmap, please enter your Mapbox public token.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Get your free token at{' '}
+                  <a 
+                    href="https://mapbox.com/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
                   >
-                    <span className={`text-xs font-bold ${styles.text}`}>{zone.callCount}</span>
-                  </div>
-                </div>
-              );
-            })}
+                    mapbox.com
+                  </a>
+                  {' '}→ Dashboard → Tokens
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="pk.eyJ1Ijoi..."
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+                className="flex-1"
+              />
+              <Button onClick={handleTokenSubmit} disabled={!tokenInput.trim()}>
+                Load Map
+              </Button>
+            </div>
           </div>
-        </div>
-
-        {/* Legend */}
-        <div className="flex items-center justify-center gap-6 mb-6">
-          {(['low', 'medium', 'high', 'critical'] as const).map((intensity) => {
-            const styles = intensityColors[intensity];
-            return (
-              <div key={intensity} className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${styles.bg} ${styles.border} border`} />
-                <span className="text-xs text-muted-foreground">{intensityLabels[intensity]}</span>
+        ) : (
+          <div className="space-y-4">
+            <div 
+              ref={mapContainer} 
+              className="w-full h-[400px] rounded-lg overflow-hidden border border-border/50"
+            />
+            
+            {/* Legend */}
+            <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-muted/30 border border-border/30">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-medium">Low Density</span>
+                <div className="w-32 h-3 rounded-full bg-gradient-to-r from-blue-600 via-cyan-400 via-green-400 via-yellow-400 via-orange-500 to-red-600" />
+                <span className="text-xs text-muted-foreground font-medium">High Density</span>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Zone List */}
-        <div className="space-y-2">
-          {sortedZones.slice(0, 5).map((zone, index) => {
-            const styles = intensityColors[zone.intensity];
-            return (
-              <div 
-                key={zone.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors animate-slide-up"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <div className="flex items-center gap-3">
-                  {zone.intensity === 'critical' && (
-                    <AlertTriangle className="h-4 w-4 text-urgent animate-pulse" />
-                  )}
-                  <span className="font-medium text-foreground">{zone.name}</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm text-muted-foreground">{zone.callCount} calls</span>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${styles.bg} ${styles.text}`}>
-                    {intensityLabels[zone.intensity]}
-                  </span>
-                </div>
+              <div className="text-xs text-muted-foreground">
+                Real-time distress call distribution
               </div>
-            );
-          })}
-        </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
