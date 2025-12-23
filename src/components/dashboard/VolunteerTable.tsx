@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Volunteer } from '@/data/mockData';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +12,10 @@ import {
 } from '@/components/ui/table';
 import { Users, MapPin, Briefcase, Calendar } from 'lucide-react';
 
-const statusConfig: Record<Volunteer['status'], { label: string; variant: 'success' | 'warning' | 'pending' | 'urgent' }> = {
+const statusConfig: Record<
+  Volunteer['status'],
+  { label: string; variant: 'success' | 'warning' | 'pending' | 'urgent' }
+> = {
   completed: { label: 'Completed', variant: 'success' },
   'in-progress': { label: 'In Progress', variant: 'warning' },
   pending: { label: 'Pending', variant: 'pending' },
@@ -23,6 +27,29 @@ type Props = {
 };
 
 export function VolunteerTable({ volunteers }: Props) {
+
+  // 🔥 SYNC VOLUNTEER TABLE TO BACKEND
+  useEffect(() => {
+  if (!volunteers || volunteers.length === 0) return;
+
+  const payload = volunteers.map(v => ({
+    name: v.name,
+    skill: v.skill,
+    location: v.location,
+    status: v.status,
+  }));
+
+  console.log("SYNC PAYLOAD:", payload);
+
+  fetch('http://127.0.0.1:8000/volunteers/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).catch(err => {
+    console.error('Failed to sync volunteers', err);
+  });
+}, [volunteers]);
+
   return (
     <Card className="border shadow-md">
       <CardHeader className="border-b bg-muted/30">
@@ -31,24 +58,30 @@ export function VolunteerTable({ volunteers }: Props) {
             <Users className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-xl font-semibold">Volunteer Assignments</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">Real-time tracking of volunteer tasks and completion status</p>
+            <CardTitle className="text-xl font-semibold">
+              Volunteer Assignments
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Real-time tracking of volunteer tasks and completion status
+            </p>
           </div>
         </div>
       </CardHeader>
+
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
-                <TableHead className="font-semibold text-foreground">Volunteer</TableHead>
-                <TableHead className="font-semibold text-foreground">Skill</TableHead>
-                <TableHead className="font-semibold text-foreground min-w-[300px]">Assigned Job</TableHead>
-                <TableHead className="font-semibold text-foreground">Location</TableHead>
-                <TableHead className="font-semibold text-foreground">Date</TableHead>
-                <TableHead className="font-semibold text-foreground text-center">Status</TableHead>
+                <TableHead>Volunteer</TableHead>
+                <TableHead>Skill</TableHead>
+                <TableHead className="min-w-[300px]">Assigned Job</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead className="text-center">Status</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
               {volunteers.length === 0 ? (
                 <TableRow>
@@ -56,13 +89,15 @@ export function VolunteerTable({ volunteers }: Props) {
                     <div className="flex flex-col items-center gap-2 text-muted-foreground">
                       <Users className="h-8 w-8" />
                       <p className="text-sm">No volunteers registered yet</p>
-                      <p className="text-xs">New registrations will appear here automatically</p>
+                      <p className="text-xs">
+                        New registrations will appear here automatically
+                      </p>
                     </div>
                   </TableCell>
                 </TableRow>
               ) : (
                 volunteers.map((volunteer, index) => (
-                  <TableRow 
+                  <TableRow
                     key={volunteer.id}
                     className="animate-fade-in hover:bg-muted/30 transition-colors"
                     style={{ animationDelay: `${index * 50}ms` }}
@@ -70,37 +105,53 @@ export function VolunteerTable({ volunteers }: Props) {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-primary-foreground font-semibold text-sm">
-                          {volunteer.name.split(' ').map(n => n[0]).join('')}
+                          {volunteer.name
+                            .split(' ')
+                            .map(n => n[0])
+                            .join('')}
                         </div>
                         <div>
-                          <p className="font-medium text-foreground">{volunteer.name}</p>
-                          <p className="text-xs text-muted-foreground">{volunteer.phone}</p>
+                          <p className="font-medium">{volunteer.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {volunteer.phone}
+                          </p>
                         </div>
                       </div>
                     </TableCell>
+
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Briefcase className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm">{volunteer.skill}</span>
                       </div>
                     </TableCell>
+
                     <TableCell>
-                      <p className="text-sm text-foreground leading-relaxed">{volunteer.assignedJob}</p>
+                      <p className="text-sm leading-relaxed">
+                        {volunteer.assignedJob}
+                      </p>
                     </TableCell>
+
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm">{volunteer.location}</span>
                       </div>
                     </TableCell>
+
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{volunteer.assignedDate}</span>
+                        <span className="text-sm">
+                          {volunteer.assignedDate}
+                        </span>
                       </div>
                     </TableCell>
+
                     <TableCell className="text-center">
-                      <Badge variant={statusConfig[volunteer.status].variant}>
+                      <Badge
+                        variant={statusConfig[volunteer.status].variant}
+                      >
                         {statusConfig[volunteer.status].label}
                       </Badge>
                     </TableCell>
