@@ -19,7 +19,6 @@ const Index = () => {
               </div>
               <div>
                 <h1 className="text-xl font-bold tracking-tight">Emergency Response Dashboard</h1>
-                <p className="text-xs text-secondary-foreground/70">Public Transparency Portal</p>
               </div>
             </div>
             <div className="flex items-center gap-2 text-sm">
