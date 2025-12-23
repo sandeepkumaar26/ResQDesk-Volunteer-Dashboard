@@ -1,12 +1,31 @@
-import { stats } from '@/data/mockData';
+import { useState } from 'react';
+import { stats, Volunteer } from '@/data/mockData';
 import { StatsCard } from '@/components/dashboard/StatsCard';
 import { VolunteerTable } from '@/components/dashboard/VolunteerTable';
 import { DistressCallChart } from '@/components/dashboard/DistressCallChart';
 import { HeatMap } from '@/components/dashboard/HeatMap';
-import { VolunteerRegistrationForm } from '@/components/dashboard/VolunteerRegistrationForm';
+import { VolunteerRegistrationForm, Volunteer as RegistrationVolunteer } from '@/components/dashboard/VolunteerRegistrationForm';
 import { Users, ClipboardCheck, AlertTriangle, CheckCircle2, Shield } from 'lucide-react';
 
 const Index = () => {
+  const [volunteers, setVolunteers] = useState<Volunteer[]>([]);
+
+  const handleVolunteerRegistration = (newVolunteer: RegistrationVolunteer) => {
+    // Create a new volunteer entry with additional fields required by the table
+    const volunteerEntry: Volunteer = {
+      id: Date.now().toString(), // Simple ID generation
+      name: newVolunteer.name,
+      phone: newVolunteer.phone,
+      skill: newVolunteer.skill,
+      assignedJob: 'Pending assignment - awaiting deployment',
+      location: newVolunteer.location,
+      status: 'pending',
+      assignedDate: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
+    };
+
+    // Add the new volunteer to the list
+    setVolunteers(prev => [...prev, volunteerEntry]);
+  };
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -39,7 +58,7 @@ const Index = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatsCard
               title="Total Volunteers"
-              value={stats.totalVolunteers}
+              value={volunteers.length}
               icon={Users}
               variant="primary"
               trend={{ value: 12, isPositive: true }}
@@ -68,7 +87,7 @@ const Index = () => {
 
         {/* Volunteer Table */}
         <section className="animate-slide-up" style={{ animationDelay: '100ms' }}>
-          <VolunteerTable />
+          <VolunteerTable volunteers={volunteers} />
         </section>
 
         {/* Charts Section */}
@@ -83,7 +102,7 @@ const Index = () => {
 
         {/* Registration Form */}
         <section className="animate-slide-up" style={{ animationDelay: '400ms' }}>
-          <VolunteerRegistrationForm />
+          <VolunteerRegistrationForm onRegister={handleVolunteerRegistration} />
         </section>
 
         {/* Footer */}
